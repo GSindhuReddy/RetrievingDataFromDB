@@ -1,0 +1,47 @@
+ db.getCollection('TEAM').aggregate([
+    {
+        $lookup: {
+            from: "SCHEDULE_RESULTS",
+            let: { teamID: "$TeamID" },
+            pipeline: [
+                {
+                    $match:
+                    {
+                        $expr:
+                        {
+                            $or:
+                                [
+                                    { $eq: ["$TeamID1", "$$teamID"] },
+                                    { $eq: ["$TeamID2", "$$teamID"] }
+                                ]
+                        }
+                    }
+                }
+            ],
+            as: "team_StadiumData"
+        }
+    }, { $unwind: { path: '$team_StadiumData' } },
+    {
+        $lookup: {
+            from: "STADIUM",
+            let: { stadiumID: "$team_StadiumData.SID" },
+            pipeline: [
+                {
+                    $match:
+                    {
+                        $expr:
+                        {
+                            $eq: ["$SID", "$$stadiumID"]
+                        }
+                    }
+                }
+            ],
+            as: "finalData"
+        }
+    },
+    { $addFields: { 'team_StadiumData.SName': { $arrayElemAt: ["$finalData.SName", 0] }, 'team_StadiumData.SCity': { $arrayElemAt: ["$finalData.SCity", 0] }, 'team_StadiumData.SCapacity': { $arrayElemAt: ["$finalData.SCapacity", 0] } } },
+    { $group: { _id: '$TeamID', team_StadiumData: { $push: '$team_StadiumData' }, docs: { $first: '$$ROOT' } } },
+    { $addFields: { 'docs.team_StadiumData': '$team_StadiumData' } },
+    { $replaceRoot: { newRoot: '$docs' } },
+    { $project: { finalData: 0, 'team_StadiumData._id': 0 } }
+])
